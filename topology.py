@@ -1,18 +1,19 @@
 from mininet.net import Mininet
 from mininet.node import Node
-from mininet.node import OVSKernelSwitch
-from mininet.cli import CLI
+from mininet.node import OVSSKernelSwitch
+from mininet.link import TCLink
 from mininet.log import setLogLevel
 
 
 class LinuxRouter(Node):
     """
-    Nó utilizado como firewall/roteador.
-    O encaminhamento IP será habilitado durante a inicialização.
+    Host Linux que atuará como firewall/roteador.
     """
 
     def config(self, **params):
         super().config(**params)
+
+        # Habilita roteamento IPv4
         self.cmd("sysctl -w net.ipv4.ip_forward=1")
 
     def terminate(self):
@@ -20,76 +21,131 @@ class LinuxRouter(Node):
         super().terminate()
 
 
-def create_topology():
+class FirewallTopology:
 
-    net = Mininet(controller=None, switch=OVSKernelSwitch)
+    def __init__(self):
 
-    print("*** Criando hosts")
+       self.net = Mininet(
+    controller=None,
+    switch=OVSSKernelSwitch,
+    link=TCLink,
+    autoSetMacs=True,
+    autoStaticArp=True
+)
+    def build(self):
 
-    internet = net.addHost(
-        "internet",
-        ip="10.0.0.1/24",
-        defaultRoute="via 10.0.0.254"
-    )
+        print("\n=== Criando switches ===")
 
-    web = net.addHost(
-        "web",
-        ip="10.0.0.10/24",
-        defaultRoute="via 10.0.0.254"
-    )
+        s_wan = self.net.addSwitch(
+    "s1",
+    dpid="0000000000000001",
+    failMode="standalone"
+)
 
-    dns = net.addHost(
-        "dns",
-        ip="10.0.0.20/24",
-        defaultRoute="via 10.0.0.254"
-    )
+        s_lan = self.net.addSwitch(
+    "s2",
+    dpid="0000000000000002",
+    failMode="standalone"
+)
 
-    admin = net.addHost(
-        "admin",
-        ip="10.0.0.100/24",
-        defaultRoute="via 10.0.0.254"
-    )
+        internet = self.net.addHost(
+            "internet",
+            ip="192.168.100.2/24",
+            defaultRoute="via 192.168.100.1"
+        )
 
-    client = net.addHost(
-        "client",
-        ip="10.0.0.101/24",
-        defaultRoute="via 10.0.0.254"
-    )
+        firewall = self.net.addHost(
+            "fw",
+            cls=LinuxRouter
+        )
 
-    firewall = net.addHost(
-        "fw",
-        cls=LinuxRouter,
-        ip="10.0.0.254/24"
-    )
+        web = self.net.addHost(
+            "web",
+            ip="10.0.0.10/24",
+            defaultRoute="via 10.0.0.1"
+        )
 
-    print("*** Criando switch")
+        dns = self.net.addHost(
+            "dns",
+            ip="10.0.0.20/24",
+            defaultRoute="via 10.0.0.1"
+        )
 
-    s1 = net.addSwitch("s1")
+        admin = self.net.addHost(
+            "admin",
+            ip="10.0.0.100/24",
+            defaultRoute="via 10.0.0.1"
+        )
 
-    print("*** Conectando hosts")
+        client = self.net.addHost(
+            "client",
+            ip="10.0.0.101/24",
+            defaultRoute="via 10.0.0.1"
+        )
 
-    net.addLink(internet, s1)
-    net.addLink(web, s1)
-    net.addLink(dns, s1)
-    net.addLink(admin, s1)
-    net.addLink(client, s1)
-    net.addLink(firewall, s1)
+        print("\n=== Criando enlaces ===")
 
-    print("*** Inicializando rede")
+        self.net.addLink(internet, s_wan)
 
-    net.start()
+        self.net.addLink(firewall, s_wan, intfName1="fw-eth0")
 
-    print("*** Topologia criada com sucesso")
+        self.net.addLink(firewall, s_lan, intfName1="fw-eth1")
 
-    return net
+        self.net.addLink(web, s_lan)
+
+        self.net.addLink(dns, s_lan)
+
+        self.net.addLink(admin, s_lan)
+
+        self.net.addLink(client, s_lan)
+
+        print("\n=== Inicializando rede ===")
+
+        self.net.start()
+
+        print("\n=== Configurando interfaces do firewall ===")
+
+        firewall.cmd("ifconfig fw-eth0 192.168.100.1/24")
+
+        firewall.cmd("ifconfig fw-eth1 10.0.0.1/24")
+
+        print("\n=== Limpando regras antigas ===")
+
+        firewall.cmd("iptables -F")
+        firewall.cmd("iptables -t nat -F")
+        firewall.cmd("iptables -X")
+
+        print("\n=== Topologia criada com sucesso ===")
+
+        return self.net
+
+    def stop(self):
+
+        print("\n=== Encerrando rede ===")
+
+        self.net.stop()
+
+
+def create_network():
+    topology = FirewallTopology()
+    return topology.build()
 
 
 if __name__ == "__main__":
 
     setLogLevel("info")
 
-    net = create_topology()
+    topology = FirewallTopology()
 
-    CLI(net)
+    net = topology.build()
 
-    net.stop()
+    print("\nTopologia criada com sucesso.")
+
+    print("\nHosts disponíveis:")
+
+    for host in net.hosts:
+        print(f" - {host.name}: {host.IP()}")
+
+    print("\nEntre no CLI do Mininet utilizando outro script (main.py) ou adapte este arquivo para testes.")
+
+    topology.stop()

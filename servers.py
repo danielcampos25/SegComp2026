@@ -1,125 +1,593 @@
+"""
+servers.py
+
+Gerenciamento dos serviços da rede.
+
+Este módulo é responsável por iniciar e encerrar todos os serviços
+executados nos hosts da topologia Mininet.
+
+Serviços implementados:
+
+- HTTPS
+- DNS
+- SSH
+- FTP
+- Telnet
+
+Todos os serviços herdam da classe BaseServer.
+"""
+
 from pathlib import Path
+from typing import Dict
+import time
+
+
+# ============================================================
+# Diretórios utilizados pelo projeto
+# ============================================================
+
+PROJECT_ROOT = Path(".")
+
+WWW_DIRECTORY = PROJECT_ROOT / "www"
+
+FTP_DIRECTORY = PROJECT_ROOT / "ftp"
+
+DNS_DIRECTORY = PROJECT_ROOT / "dns"
+
+LOG_DIRECTORY = PROJECT_ROOT / "reports_logs"
+
+CERT_DIRECTORY = PROJECT_ROOT / "certificates"
+
+
+# ============================================================
+# Classe BaseServer
+# ============================================================
+
+class BaseServer:
+    """
+    Classe base para todos os serviços.
+
+    Cada serviço conhece apenas o host onde está sendo executado.
+
+    Toda lógica comum fica aqui para evitar duplicação.
+    """
+
+    def __init__(self, host, service_name):
+
+        self.host = host
+
+        self.service_name = service_name
+
+        self.pid = None
+
+        self.running = False
+
+    # --------------------------------------------------------
+
+    def start(self):
+        """
+        Deve ser implementado pelas subclasses.
+        """
+        raise NotImplementedError
+
+    # --------------------------------------------------------
+
+    def stop(self):
+
+        if self.pid is not None:
+
+            self.host.cmd(f"kill {self.pid}")
+
+            self.pid = None
+
+        self.running = False
+
+    # --------------------------------------------------------
+
+    def is_running(self):
+
+        return self.running
+
+    # --------------------------------------------------------
+
+    def execute(self, command):
+        """
+        Executa um comando dentro do host Mininet.
+        """
+
+        return self.host.cmd(command)
+
+    # --------------------------------------------------------
+
+    def execute_background(self, command):
+        """
+        Executa um comando em background.
+
+        O PID do processo é armazenado para encerramento futuro.
+        """
+
+        output = self.host.cmd(f"{command} > /dev/null 2>&1 & echo $!")
+
+        self.pid = output.strip()
+
+        self.running = True
+
+    # --------------------------------------------------------
+
+    def log(self, message):
+
+        print(f"[{self.service_name}] {message}")
+
+
+# ============================================================
+# Gerenciador de processos
+# ============================================================
+
+class ProcessManager:
+    """
+    Mantém referência para todos os serviços iniciados.
+
+    Isso facilita parar todos ao final do projeto.
+    """
+
+    def __init__(self):
+
+        self.services: Dict[str, BaseServer] = {}
+
+    # --------------------------------------------------------
+
+    def register(self, server: BaseServer):
+
+        self.services[server.service_name] = server
+
+    # --------------------------------------------------------
+
+    def start_all(self):
+
+        print("\n===================================")
+        print("Inicializando serviços")
+        print("===================================\n")
+
+        for server in self.services.values():
+
+            server.log("Inicializando...")
+
+            server.start()
+
+            time.sleep(0.5)
+
+        print("\nTodos os serviços foram iniciados.\n")
+
+    # --------------------------------------------------------
+
+    def stop_all(self):
+
+        print("\n===================================")
+        print("Encerrando serviços")
+        print("===================================\n")
+
+        for server in self.services.values():
+
+            server.stop()
+
+        print("\nTodos os serviços foram encerrados.\n")
+
+
+# ============================================================
+# Utilidades
+# ============================================================
+
+def create_directories():
+    """
+    Cria automaticamente todos os diretórios utilizados
+    durante a execução.
+    """
+
+    WWW_DIRECTORY.mkdir(exist_ok=True)
+
+    FTP_DIRECTORY.mkdir(exist_ok=True)
+
+    DNS_DIRECTORY.mkdir(exist_ok=True)
+
+    LOG_DIRECTORY.mkdir(exist_ok=True)
+
+
+# ============================================================
+# Página HTML utilizada pelo servidor HTTPS
+# ============================================================
+
+DEFAULT_HTML = """
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Projeto Segurança Computacional</title>
+
+</head>
+
+<body>
+
+<h1>Servidor HTTPS</h1>
+
+<p>
+Projeto de Firewall utilizando Mininet e iptables.
+</p>
+
+</body>
+
+</html>
+"""
+
+
+def create_default_page():
+
+    page = WWW_DIRECTORY / "index.html"
+
+    if page.exists():
+
+        return
+
+    page.write_text(DEFAULT_HTML)
+
+
+# ============================================================
+# Configuração do DNS
+# ============================================================
+
+DEFAULT_DNSMASQ = """
+port=53
+
+no-daemon
+
+log-queries
+
+address=/web.local/10.0.0.10
+
+address=/dns.local/10.0.0.20
+"""
+
+
+def create_dns_configuration():
+
+    conf = DNS_DIRECTORY / "dnsmasq.conf"
+
+    if conf.exists():
+
+        return
+
+    conf.write_text(DEFAULT_DNSMASQ)
+
+
+# ============================================================
+# Diretório FTP
+# ============================================================
+
+def create_ftp_directory():
+
+    readme = FTP_DIRECTORY / "README.txt"
+
+    if readme.exists():
+
+        return
+
+    readme.write_text(
+        "Servidor FTP do projeto de Segurança Computacional.\n"
+    )
+
+# ============================================================
+# HTTPS Server
+# ============================================================
+
+class HTTPSServer(BaseServer):
+    """
+    Servidor HTTPS executado no host WEB.
+
+    Utiliza um pequeno servidor Python com SSL.
+    """
+
+    def __init__(self, host):
+
+        super().__init__(host, "HTTPS")
+
+    def create_https_script(self):
+
+        script = WWW_DIRECTORY / "https_server.py"
+
+        if script.exists():
+            return
+
+        script.write_text(
+'''
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import ssl
+import os
+
+os.chdir("www")
+
+httpd = HTTPServer(("0.0.0.0", 443), SimpleHTTPRequestHandler)
+
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
+ctx.load_cert_chain(
+    "certificates/server.crt",
+    "certificates/server.key"
+)
+
+httpd.socket = ctx.wrap_socket(
+    httpd.socket,
+    server_side=True
+)
+
+print("HTTPS Server iniciado.")
+
+httpd.serve_forever()
+'''
+        )
+
+    # --------------------------------------------------------
+
+    def start(self):
+
+        self.log("Preparando servidor HTTPS...")
+
+        create_default_page()
+
+        self.create_https_script()
+
+        self.execute_background(
+            "python3 www/https_server.py"
+        )
+
+        self.log("Servidor HTTPS iniciado.")
+
+
+# ============================================================
+# DNS Server
+# ============================================================
+
+class DNSServer(BaseServer):
+    """
+    Servidor DNS utilizando dnsmasq.
+    """
+
+    def __init__(self, host):
+
+        super().__init__(host, "DNS")
+
+    def start(self):
+
+        self.log("Criando configuração DNS...")
+
+        create_dns_configuration()
+
+        self.execute_background(
+
+            "dnsmasq "
+            "--conf-file=dns/dnsmasq.conf"
+
+        )
+
+        self.log("Servidor DNS iniciado.")
+
+# ============================================================
+# FTP Server
+# ============================================================
+
+class FTPServer(BaseServer):
+    """
+    Servidor FTP utilizando pyftpdlib.
+    """
+
+    def __init__(self, host):
+
+        super().__init__(host, "FTP")
+
+
+    def create_ftp_script(self):
+
+        script = FTP_DIRECTORY / "ftp_server.py"
+
+        if script.exists():
+
+            return
+
+
+        script.write_text(
+'''
+from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler
+from pyftpdlib.servers import FTPServer
+
+
+authorizer = DummyAuthorizer()
+
+
+authorizer.add_user(
+    "ftpuser",
+    "123456",
+    "ftp",
+    perm="elradfmw"
+)
+
+
+handler = FTPHandler
+
+handler.authorizer = authorizer
+
+
+server = FTPServer(
+    ("0.0.0.0", 21),
+    handler
+)
+
+
+print("FTP Server iniciado.")
+
+server.serve_forever()
+'''
+        )
+
+
+    def start(self):
+
+        self.log("Preparando servidor FTP...")
+
+        create_ftp_directory()
+
+        self.create_ftp_script()
+
+
+        self.execute_background(
+
+            "python3 ftp/ftp_server.py"
+
+        )
+
+
+        self.log("Servidor FTP iniciado.")
+
+
+
+
+# ============================================================
+# SSH Server
+# ============================================================
+
+class SSHServer(BaseServer):
+    """
+    Servidor SSH utilizando OpenSSH.
+    """
+
+    def __init__(self, host):
+
+        super().__init__(host, "SSH")
+
+
+    def start(self):
+
+        self.log("Iniciando SSH...")
+
+
+        self.execute(
+
+            "mkdir -p /run/sshd"
+
+        )
+
+
+        self.execute_background(
+
+            "/usr/sbin/sshd -D"
+
+        )
+
+
+        self.log("Servidor SSH iniciado.")
+
+
+
+
+# ============================================================
+# Telnet Server
+# ============================================================
+
+class TelnetServer(BaseServer):
+    """
+    Servidor Telnet.
+    """
+
+    def __init__(self, host):
+
+        super().__init__(host, "TELNET")
+
+
+    def start(self):
+
+        self.log("Iniciando Telnet...")
+
+
+        self.execute_background(
+
+            "/usr/sbin/telnetd -F"
+
+        )
+
+
+        self.log("Servidor Telnet iniciado.")
+
+# ============================================================
+# Server Manager
+# ============================================================
 
 
 class ServerManager:
     """
-    Responsável por iniciar os serviços utilizados durante os testes.
+    Controlador principal dos serviços.
     """
 
-    def __init__(self, net):
 
-        self.net = net
+    def __init__(self, network):
 
-        self.web = net.get("web")
-        self.dns = net.get("dns")
+        self.network = network
 
-    # ----------------------------------------------------
-    # HTTPS
-    # ----------------------------------------------------
+        self.process_manager = ProcessManager()
 
-    def start_https(self):
 
-        cert_dir = Path("/tmp/certs")
+    def setup(self):
 
-        self.web.cmd(f"mkdir -p {cert_dir}")
+        create_directories()
 
-        self.web.cmd(
-            f"""
-            openssl req -x509 -nodes \
-            -days 365 \
-            -newkey rsa:2048 \
-            -keyout {cert_dir}/server.key \
-            -out {cert_dir}/server.crt \
-            -subj "/CN=web"
-            """
+
+        web = self.network.get("web")
+
+        dns = self.network.get("dns")
+
+
+        self.process_manager.register(
+
+            HTTPSServer(web)
+
         )
 
-        self.web.cmd(
-            f"""
-            openssl s_server \
-            -accept 443 \
-            -cert {cert_dir}/server.crt \
-            -key {cert_dir}/server.key \
-            -www > /tmp/https.log 2>&1 &
-            """
+
+        self.process_manager.register(
+
+            FTPServer(web)
+
         )
 
-        print("[+] HTTPS iniciado")
 
-    # ----------------------------------------------------
-    # DNS
-    # ----------------------------------------------------
+        self.process_manager.register(
 
-    def start_dns(self):
+            SSHServer(web)
 
-        self.dns.cmd(
-            """
-            dnsmasq \
-            --no-daemon \
-            --port=53 \
-            > /tmp/dns.log 2>&1 &
-            """
         )
 
-        print("[+] DNS iniciado")
 
-    # ----------------------------------------------------
-    # FTP
-    # ----------------------------------------------------
+        self.process_manager.register(
 
-    def start_ftp(self):
+            TelnetServer(web)
 
-        self.web.cmd(
-            """
-            python3 -m pyftpdlib \
-            -p 21 \
-            > /tmp/ftp.log 2>&1 &
-            """
         )
 
-        print("[+] FTP iniciado")
 
-    # ----------------------------------------------------
-    # Telnet
-    # ----------------------------------------------------
+        self.process_manager.register(
 
-    def start_telnet(self):
+            DNSServer(dns)
 
-        self.web.cmd(
-            """
-            busybox telnetd \
-            -p 23
-            """
         )
 
-        print("[+] Telnet iniciado")
 
-    # ----------------------------------------------------
-    # SSH
-    # ----------------------------------------------------
+    def start(self):
 
-    def start_ssh(self):
+        self.setup()
 
-        self.web.cmd(
-            """
-            /usr/sbin/sshd
-            """
-        )
+        self.process_manager.start_all()
 
-        print("[+] SSH iniciado")
 
-    # ----------------------------------------------------
-    # Inicialização completa
-    # ----------------------------------------------------
 
-    def start_all(self):
+    def stop(self):
 
-        print("\n=== Inicializando Serviços ===\n")
-
-        self.start_https()
-        self.start_dns()
-        self.start_ftp()
-        self.start_telnet()
-        self.start_ssh()
-
-        print("\n=== Serviços iniciados ===\n")
+        self.process_manager.stop_all()
