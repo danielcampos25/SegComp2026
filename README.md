@@ -2,34 +2,34 @@
 
 ## Descrição
 
-Este projeto tem como objetivo implementar uma política de segurança utilizando um firewall baseado em **iptables** em uma rede simulada com o **Mininet**, conforme proposto na Parte V do projeto da disciplina de Segurança Computacional.
+Implementação de uma política de segurança utilizando firewall baseado em **iptables** em rede simulada com **Mininet**, conforme a Parte V da disciplina de Segurança Computacional.
 
-A rede simula um ambiente corporativo contendo serviços internos, um firewall e um host representando a Internet.
+A rede simula um ambiente corporativo: Internet, firewall Linux, servidores internos (web, dns), administrador e cliente comum.
 
 ---
 
-# Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 SegComp2026/
-│
-├── topology.py          # Criação da topologia da rede
-├── firewall.py          # Configuração das regras do firewall
-├── servers.py           # Inicialização dos serviços
-├── tests.py             # Execução dos testes
-├── certificates.py      # Geração de certificados e chaves
-├── main.py              # Execução completa do projeto
-│
-├── certificates/        # Certificados HTTPS e chaves SSH
-│
-├── reports_logs/        # Logs dos testes
-│
-└── README.md
+├── main.py                 # Orquestrador principal
+├── topology.py             # Topologia da rede (Mininet)
+├── firewall.py             # Regras iptables (fw, web, dns)
+├── servers.py              # Serviços: HTTPS, DNS, SSH, FTP, Telnet
+├── tests.py                # Testes automáticos de validação
+├── certificates.py         # Geração de certificados HTTPS
+├── packet_tracer_acls.md   # ACLs equivalentes para Packet Tracer
+├── TODO.md                 # Controle de desenvolvimento
+├── setup.sh                # Script de instalação (Ubuntu)
+├── run.sh                  # Script de execução
+├── certificates/           # Certificados e chaves gerados
+├── reports_logs/           # Logs e evidências (gerado na execução)
+└── www/                    # Páginas HTML e script HTTPS
 ```
 
 ---
 
-# Arquitetura da Rede
+## Arquitetura da Rede
 
 ```
                     INTERNET
@@ -60,223 +60,169 @@ Todo o tráfego entre a Internet e a rede interna passa obrigatoriamente pelo fi
 
 ---
 
-# Requisitos
+## Requisitos
 
-O projeto foi desenvolvido para execução em:
-
-- Ubuntu 24.04 (WSL2 ou Máquina Virtual)
+- Linux (Ubuntu 24.04+ ou Arch/CachyOS)
 - Python 3.13+
 - Mininet
 - Open vSwitch
-
-Não é suportada execução diretamente no Windows.
+- iptables
+- OpenSSH, dnsmasq, OpenSSL, curl
 
 ---
 
-# Instalação
+## Instalação
 
-Após clonar o repositório, entre na pasta do projeto:
-
-```bash
-cd SegComp2026
-```
-
-Conceda permissão de execução aos scripts:
-
-```bash
-chmod +x setup.sh
-chmod +x run.sh
-```
-
-Execute o script de configuração:
-
+### Ubuntu/Debian
 ```bash
 ./setup.sh
 ```
 
-O script realiza automaticamente:
-
-- Atualização dos pacotes do sistema;
-- Instalação de todas as dependências do projeto;
-- Criação do ambiente virtual Python (`.venv`);
-- Instalação das bibliotecas Python necessárias;
-- Criação das pastas `certificates/` e `reports_logs/`;
-- Limpeza de configurações antigas do Mininet;
-- Verificação da instalação das principais ferramentas.
-
-Ao final da execução, o ambiente estará pronto para utilização.
+### CachyOS / Arch Linux (AUR)
+```bash
+yay -S mininet openvswitch python-pyftpdlib
+yay -S openssl openssh dnsmasq inetutils dnsutils curl
+```
 
 ---
 
-# Executando o Projeto
-
-Após concluir a instalação, basta executar:
+## Execução
 
 ```bash
-./run.sh
+sudo systemctl start ovsdb-server ovs-vswitchd   # se necessário
+sudo mn -c                                         # limpar topologias antigas
+./run.sh                                           # executa o projeto
 ```
-
-O script realiza automaticamente:
-
-- Ativação do ambiente virtual Python;
-- Execução do projeto utilizando privilégios de administrador.
-
-Não é necessário ativar manualmente o ambiente virtual nem utilizar diretamente o comando `python`.
 
 ---
 
-# Caso seja necessário executar manualmente
-
-Ative o ambiente virtual:
-
-```bash
-source .venv/bin/activate
-```
-
-Execute o projeto:
-
-```bash
-sudo -E python3 main.py
-```
-# Scripts Auxiliares
-
-O projeto possui dois scripts para facilitar sua utilização.
-
-| Script | Função |
-|---------|--------|
-| `setup.sh` | Configura todo o ambiente do projeto automaticamente. |
-| `run.sh` | Executa o projeto com todas as configurações necessárias. |
-
-Fluxo recomendado:
-
-```bash
-git clone <repositorio>
-
-cd SegComp2026
-
-chmod +x setup.sh run.sh
-
-./setup.sh
-
-./run.sh
-```
-
-# Serviços Implementados
-
-O projeto disponibiliza os seguintes serviços:
-
-- HTTPS
-- DNS
-- SSH
-- FTP
-- Telnet
-
-O firewall será responsável por permitir ou bloquear esses serviços conforme a política de segurança definida.
-
----
-
-# Política de Segurança
-
-### Serviços Permitidos
-
-- HTTPS
-- DNS
-
-### Serviços Restritos
-
-- FTP
-- Telnet
-
-### Serviço Administrativo
-
-- SSH apenas para o host administrador
-
----
-
-# Fluxo de Execução
+## Fluxo de Execução
 
 ```
 main.py
-    │
-    ├── topology.py
-    │
-    ├── certificates.py
-    │
-    ├── servers.py
-    │
-    ├── firewall.py
-    │
-    └── tests.py
+  ├── topology.py       (cria rede, switches, hosts)
+  ├── certificates.py   (gera certificados HTTPS)
+  ├── servers.py        (inicia serviços nos hosts)
+  ├── firewall.py       (aplica regras iptables)
+  └── tests.py          (executa 6 testes de validação)
 ```
 
 ---
 
-# Testes Realizados
+## Política de Segurança
 
-## Permitidos
+### Serviços Permitidos
+| Origem | Destino | Serviço | Porto | Ação |
+|--------|---------|---------|-------|------|
+| Internet (192.168.100.2) | Web Server (10.0.0.10) | HTTPS | 443/TCP | Permitir |
+| Internet (192.168.100.2) | DNS Server (10.0.0.20) | DNS | 53/UDP | Permitir |
+| Admin (10.0.0.100) | Servidores | SSH | 22/TCP | Permitir |
 
-- HTTPS
-- DNS
-- SSH (Administrador)
-
-## Bloqueados
-
-- FTP
-- Telnet
-- SSH (Cliente comum)
-
----
-
-# Logs
-
-Todos os logs produzidos pelo projeto serão armazenados na pasta:
-
-```
-reports_logs/
-```
-
-Exemplos:
-
-```
-https.log
-dns.log
-ssh.log
-ftp.log
-telnet.log
-iptables.log
-tests.log
-```
+### Serviços Bloqueados
+| Origem | Destino | Serviço | Porto | Ação |
+|--------|---------|---------|-------|------|
+| Qualquer | Servidores | Telnet | 23/TCP | Negar |
+| Qualquer | Servidores | FTP | 21/TCP | Negar |
+| Cliente (10.0.0.101) | Servidores | SSH | 22/TCP | Negar |
+| WAN → LAN | Qualquer | Qualquer | — | Negar (default) |
 
 ---
 
-# Certificados
+## Portas dos Serviços
 
-Os certificados HTTPS e as chaves SSH serão gerados automaticamente durante a execução do projeto.
-
-Os arquivos serão armazenados em:
-
-```
-certificates/
-```
+| Serviço | Host | Porto | Protocolo |
+|---------|------|-------|-----------|
+| HTTPS | web (10.0.0.10) | 443 | TCP |
+| FTP | web (10.0.0.10) | 21 | TCP |
+| SSH | web (10.0.0.10) | 22 | TCP |
+| Telnet | web (10.0.0.10) | 23 | TCP |
+| DNS | dns (10.0.0.20) | 53 | UDP/TCP |
 
 ---
 
-# Observações
+## Implementação do Firewall
 
-Caso ocorra algum erro durante a execução do Mininet, execute novamente:
+### Host `fw` (iptables FORWARD — controle WAN ↔ LAN)
+- Default policy: DROP
+- Liberado: HTTPS (internet → web), DNS (internet → dns)
+- Bloqueado com log: Telnet, FTP, SSH vindos da WAN
+
+### Host `web` (iptables INPUT — controle local)
+- Default policy: DROP
+- Liberado: HTTPS (qualquer origem), SSH (admin 10.0.0.100)
+- Bloqueado com log: Telnet, FTP, SSH do cliente
+
+### Host `dns` (iptables INPUT — controle DNS)
+- Default policy: DROP
+- Liberado: DNS (UDP/TCP 53)
+
+---
+
+## Testes de Validação
+
+6/6 testes passando:
+
+| Teste | Comando | Resultado |
+|-------|---------|-----------|
+| HTTPS (internet → web) | `curl -k https://10.0.0.10/` | PASS (200) |
+| DNS (internet → dns) | `nslookup web.local 10.0.0.20` | PASS |
+| SSH Admin (admin → web) | `socket.connect(('10.0.0.10', 22))` | PASS |
+| Telnet Bloqueado (client → web) | `telnet 10.0.0.10 23` | PASS (bloqueado) |
+| FTP Bloqueado (client → web) | `curl ftp://10.0.0.10/` | PASS (bloqueado) |
+| SSH Cliente Bloqueado (client → web) | `socket.connect(('10.0.0.10', 22))` | PASS (bloqueado) |
+
+---
+
+## Evidências Geradas
+
+Após a execução, `reports_logs/` contém:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `tests.log` | Resultados detalhados de cada teste |
+| `service_ports.log` | Portas e status dos serviços |
+| `iptables_fw.rules` | Regras do firewall (host fw) |
+| `iptables_web.rules` | Regras do servidor web |
+| `iptables_dns.rules` | Regras do servidor DNS |
+| `evidencias_completas.log` | Relatório consolidado com política, regras, testes e avaliação |
+
+---
+
+## ACLs Packet Tracer (Atividade 5.3)
+
+Documentação completa em [`packet_tracer_acls.md`](packet_tracer_acls.md).
+
+### Resumo
+- **ACL 100** (interface WAN Fa0/0 in): filtra tráfego da Internet para a LAN
+- **ACL 101** (interface LAN Fa0/1 in): filtra tráfego entre hosts internos
+
+---
+
+## Avaliação dos Resultados (Atividade 5.5)
+
+### 1. O firewall protege contra invasões?
+**Sim.** Default DROP nas chains FORWARD e INPUT. Apenas HTTPS e DNS são permitidos da Internet. O DROP silencioso torna a rede interna invisível para varreduras externas.
+
+### 2. O firewall protege contra malware interno?
+**Parcialmente.** Firewall controla tráfego entre redes (WAN ↔ LAN). Hosts na mesma LAN comunicam-se via switch, sem passar pelo firewall. Regras INPUT nos servidores mitigam riscos locais. Proteção completa exigiria VLANs/DMZ + IDS.
+
+### 3. O firewall protege contra phishing?
+**Indiretamente.** Firewall reduz superfície de ataque (apenas HTTPS e DNS expostos) e bloqueia serviços inseguros (Telten, FTP). Phishing é ataque de engenharia social e requer camadas adicionais: filtro antispam, DMARC, MFA e conscientização.
+
+---
+
+## Observações
 
 ```bash
+# Limpar topologias antigas do Mininet
 sudo mn -c
-```
 
-Caso o ambiente virtual não esteja ativo:
-
-```bash
+# Ativar ambiente virtual manualmente
 source .venv/bin/activate
 ```
 
 ---
 
-# Autores
+## Autores
 
-Projeto desenvolvido para a disciplina de Segurança Computacional.
+Projeto desenvolvido para a disciplina de Segurança Computacional — 2026.

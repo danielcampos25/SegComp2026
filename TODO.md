@@ -1,54 +1,35 @@
-# Controle de Desenvolvimento
-## Projeto Segurança Computacional 2026
+# Controle de Desenvolvimento — Projeto Segurança Computacional 2026
 
-## Visão geral
+## ✅ Projeto Completo
 
-Este projeto tem como objetivo implementar uma política de segurança
-utilizando Mininet, serviços reais e regras de firewall.
+### Topologia de Rede (`topology.py`)
+- [x] Switches WAN (s1) e LAN (s2) com OVS
+- [x] Hosts: internet, fw, web, dns, admin, client
+- [x] Firewall Linux com ip_forward e iptables
+- [x] Interfaces fw-eth0 (WAN) e fw-eth1 (LAN)
 
-A arquitetura simulada representa uma empresa contendo:
+### Certificados HTTPS (`certificates.py`)
+- [x] Geração de certificado autoassinado com OpenSSL
+- [x] Validação de existência (não recria se já existe)
 
-- Rede externa (Internet);
-- Firewall Linux utilizando iptables;
-- Rede interna;
-- Servidores;
-- Clientes;
-- Usuários administrativos.
+### Serviços (`servers.py`)
+- [x] HTTPS (443) no host web
+- [x] FTP (21) no host web
+- [x] SSH (22) no host web
+- [x] Telnet (23) no host web
+- [x] DNS (53) no host dns
+- [x] Registro de portas em `reports_logs/service_ports.log`
 
----
+### Firewall (`firewall.py`) — iptables
+- [x] FORWARD no host fw: controle WAN ↔ LAN
+- [x] INPUT no host web: HTTPS (qualquer), SSH (admin), bloqueio Telnet/FTP/SSH-client
+- [x] INPUT no host dns: DNS (qualquer)
+- [x] Default DROP em todas as chains
+- [x] LOG de pacotes bloqueados
+- [x] Snapshot em `reports_logs/iptables_*.rules`
+- [x] Limpeza automática ao encerrar
 
-## Status atual do projeto
-
-### ✅ Implementado
-
-#### Estrutura base
-- [x] Organização dos arquivos Python
-- [x] .gitignore
-
-#### Topologia de rede
-- [x] Criação dos switches WAN/LAN
-- [x] Criação do firewall Linux
-- [x] Criação dos hosts: internet, web, dns, admin, client
-- [x] Configuração das interfaces fw-eth0 e fw-eth1
-
-#### Serviços
-- [x] HTTPS
-- [x] FTP
-- [x] SSH
-- [x] Telnet
-- [x] DNS
-
-#### Certificados HTTPS
-- [x] Geração de certificado autoassinado
-- [x] Validação de existência
-
-#### Firewall (iptables)
-- [x] Regras FORWARD no host fw (controle WAN ↔ LAN)
-- [x] Regras INPUT no host web (controle local de serviços)
-- [x] Regras INPUT no host dns (controle DNS)
-- [x] Snapshot das regras em reports_logs/
-
-#### Testes de Validação
+### Testes (`tests.py`) — 6/6 passando
 - [x] HTTPS (internet → web): PASS
 - [x] DNS (internet → dns): PASS
 - [x] SSH Admin (admin → web): PASS
@@ -56,68 +37,57 @@ A arquitetura simulada representa uma empresa contendo:
 - [x] FTP Bloqueado (client → web): PASS
 - [x] SSH Cliente Bloqueado (client → web): PASS
 
-#### Evidências
-- [x] Log de testes (reports_logs/tests.log)
-- [x] Snapshot das regras iptables (reports_logs/iptables_*.rules)
+### Logs e Evidências
+- [x] `reports_logs/tests.log` — resultados detalhados
+- [x] `reports_logs/service_ports.log` — portas dos serviços
+- [x] `reports_logs/iptables_*.rules` — snapshots das regras
+- [x] `reports_logs/evidencias_completas.log` — relatório consolidado
+- [x] `reports_logs/https_errors.log` — erros do servidor HTTPS
+- [x] `reports_logs/ssh_errors.log` — erros do servidor SSH
+- [x] Logs limpos a cada execução (sem acúmulo)
 
-### 📝 Pendente
-
-- [ ] Documentar ACLs Packet Tracer (Atividade 5.3)
-- [ ] Avaliação dos Resultados (Atividade 5.5)
-- [ ] Revisar README
-- [ ] Preparar evidências finais para relatório
-
----
-
-## Matriz de Regras (Firewall)
-
-### Política Permitida
-| Origem | Destino | Serviço | Porto | Ação |
-|--------|---------|---------|-------|------|
-| Internet (192.168.100.2) | Web Server (10.0.0.10) | HTTPS | 443/TCP | Permitir |
-| Internet (192.168.100.2) | DNS Server (10.0.0.20) | DNS | 53/UDP | Permitir |
-| Admin (10.0.0.100) | Servidores | SSH | 22/TCP | Permitir |
-
-### Política Bloqueada
-| Origem | Destino | Serviço | Porto | Ação |
-|--------|---------|---------|-------|------|
-| Qualquer | Servidores | Telnet | 23/TCP | Negar |
-| Qualquer | Servidores | FTP | 21/TCP | Negar |
-| Cliente comum (10.0.0.101) | Servidores | SSH | 22/TCP | Negar |
-| WAN → LAN | Qualquer | Qualquer | — | Negar (default) |
+### Documentação
+- [x] `README.md` — documentação completa do projeto
+- [x] `packet_tracer_acls.md` — ACLs Cisco Packet Tracer (Atividade 5.3)
+- [x] Avaliação dos Resultados (Atividade 5.5) em `evidencias_completas.log`
 
 ---
 
-## Portas dos Serviços
+## Matriz de Regras
 
-| Serviço | Host | Porto | Protocolo |
-|---------|------|-------|-----------|
-| HTTPS | web (10.0.0.10) | 443 | TCP |
-| FTP | web (10.0.0.10) | 21 | TCP |
-| SSH | web (10.0.0.10) | 22 | TCP |
-| Telnet | web (10.0.0.10) | 23 | TCP |
-| DNS | dns (10.0.0.20) | 53 | UDP/TCP |
+### Permitido
+| Origem | Destino | Serviço | Porto | Ação | Onde |
+|--------|---------|---------|-------|------|------|
+| Internet (192.168.100.2) | Web (10.0.0.10) | HTTPS | 443/TCP | ACCEPT | fw FORWARD |
+| Internet (192.168.100.2) | DNS (10.0.0.20) | DNS | 53/UDP | ACCEPT | fw FORWARD |
+| Admin (10.0.0.100) | Web (10.0.0.10) | SSH | 22/TCP | ACCEPT | web INPUT |
+
+### Bloqueado
+| Origem | Destino | Serviço | Porto | Ação | Onde |
+|--------|---------|---------|-------|------|------|
+| Qualquer | Web | Telnet | 23/TCP | LOG + DROP | web INPUT + fw FORWARD |
+| Qualquer | Web | FTP | 21/TCP | LOG + DROP | web INPUT + fw FORWARD |
+| WAN (192.168.100.0/24) | LAN (10.0.0.0/24) | SSH | 22/TCP | LOG + DROP | fw FORWARD |
+| Client (10.0.0.101) | Web | SSH | 22/TCP | LOG + DROP | web INPUT |
+| WAN → LAN | Qualquer | Qualquer | — | DROP (default) | fw FORWARD |
 
 ---
 
-## Como executar
+## Estrutura Final
 
-Instalar dependências:
-
-```bash
-# CachyOS / Arch Linux (AUR)
-yay -S mininet openvswitch python-pyftpdlib
-yay -S openssl openssh dnsmasq inetutils dnsutils curl netcat-openbsd
-
-# Ubuntu / Debian
-sudo apt update
-sudo apt install mininet openvswitch-switch python3-pip python3-venv
 ```
-
-Executar:
-
-```bash
-sudo systemctl start ovsdb-server ovs-vswitchd
-sudo mn -c
-./run.sh
+SegComp2026/
+├── main.py                 # Orquestrador
+├── topology.py             # Topologia Mininet
+├── firewall.py             # Regras iptables
+├── servers.py              # Serviços de rede
+├── tests.py                # Testes de validação
+├── certificates.py         # Certificados HTTPS
+├── packet_tracer_acls.md   # ACLs Packet Tracer
+├── TODO.md                 # Este arquivo
+├── README.md               # Documentação
+├── setup.sh                # Instalação (Ubuntu)
+├── run.sh                  # Execução
+├── certificates/           # Certificados gerados
+└── www/                    # Páginas e scripts dos servidores
 ```
