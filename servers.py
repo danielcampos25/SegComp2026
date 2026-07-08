@@ -19,6 +19,7 @@ Todos os serviços herdam da classe BaseServer.
 
 from pathlib import Path
 from typing import Dict
+from datetime import datetime
 import time
 
 
@@ -295,34 +296,29 @@ class HTTPSServer(BaseServer):
 
         script = WWW_DIRECTORY / "https_server.py"
 
-        if script.exists():
-            return
+        script.unlink(missing_ok=True)
 
         script.write_text(
 '''
+import os, sys, ssl
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-import ssl
-import os
 
 os.chdir("www")
 
-httpd = HTTPServer(("0.0.0.0", 443), SimpleHTTPRequestHandler)
-
-ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-
-ctx.load_cert_chain(
-    "certificates/server.crt",
-    "certificates/server.key"
-)
-
-httpd.socket = ctx.wrap_socket(
-    httpd.socket,
-    server_side=True
-)
-
-print("HTTPS Server iniciado.")
-
-httpd.serve_forever()
+try:
+    httpd = HTTPServer(("0.0.0.0", 443), SimpleHTTPRequestHandler)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(
+        "../certificates/server.crt",
+        "../certificates/server.key"
+    )
+    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+    print("HTTPS Server iniciado.")
+    sys.stdout.flush()
+    httpd.serve_forever()
+except Exception as e:
+    print(f"HTTPS ERROR: {e}", file=sys.stderr)
+    sys.stderr.flush()
 '''
         )
 
@@ -337,7 +333,7 @@ httpd.serve_forever()
         self.create_https_script()
 
         self.execute_background(
-            "python3 www/https_server.py"
+            "python3 www/https_server.py 2>>reports_logs/https_errors.log"
         )
 
         self.log("Servidor HTTPS iniciado.")
@@ -470,16 +466,14 @@ class SSHServer(BaseServer):
         self.log("Iniciando SSH...")
 
 
-        self.execute(
+        self.execute("mkdir -p /run/sshd")
 
-            "mkdir -p /run/sshd"
-
-        )
+        self.execute("ssh-keygen -A 2>>reports_logs/ssh_errors.log")
 
 
         self.execute_background(
 
-            "/usr/sbin/sshd -D"
+            "/usr/sbin/sshd -D 2>>reports_logs/ssh_errors.log"
 
         )
 
@@ -587,6 +581,28 @@ class ServerManager:
         self.process_manager.start_all()
 
 
+
+    def log_service_ports(self):
+
+        ports = [
+            ("HTTPS",  "web", "10.0.0.10", 443,  "TCP"),
+            ("FTP",    "web", "10.0.0.10", 21,   "TCP"),
+            ("SSH",    "web", "10.0.0.10", 22,   "TCP"),
+            ("Telnet", "web", "10.0.0.10", 23,   "TCP"),
+            ("DNS",    "dns", "10.0.0.20", 53,   "UDP/TCP"),
+        ]
+
+        path = LOG_DIRECTORY / "service_ports.log"
+        with open(path, "w") as f:
+            f.write("# Registro de Serviços e Portas\n")
+            f.write(f"# Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"{'Serviço':<10} {'Host':<8} {'IP':<16} {'Porta':<8} {'Proto':<10}\n")
+            f.write("-" * 52 + "\n")
+            for name, host, ip, port, proto in ports:
+                status = "RUNNING" if self.process_manager.services.get(name) and self.process_manager.services[name].is_running() else "STOPPED"
+                f.write(f"{name:<10} {host:<8} {ip:<16} {port:<8} {proto:<10} {status}\n")
+
+        print(f"[Log] Portas registradas em {path}")
 
     def stop(self):
 

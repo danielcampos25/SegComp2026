@@ -1,6 +1,6 @@
 from mininet.net import Mininet
 from mininet.node import Node
-from mininet.node import OVSSKernelSwitch
+from mininet.node import OVSKernelSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel
 
@@ -27,7 +27,7 @@ class FirewallTopology:
 
        self.net = Mininet(
     controller=None,
-    switch=OVSSKernelSwitch,
+    switch=OVSKernelSwitch,
     link=TCLink,
     autoSetMacs=True,
     autoStaticArp=True

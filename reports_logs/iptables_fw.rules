@@ -1,0 +1,39 @@
+# Regras iptables do host fw
+# Gerado em: 2026-07-07 21:40:26
+
+# === FILTER TABLE ===
+Chain INPUT (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+    0     0 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+    0     0 LOG        all  --  *      *       0.0.0.0/0            0.0.0.0/0            LOG flags 0 level 4 prefix "[FW-INPUT-DROP] "
+
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+    0     0 ACCEPT     tcp  --  *      *       192.168.100.2        10.0.0.10            tcp dpt:443
+    0     0 ACCEPT     udp  --  *      *       192.168.100.2        10.0.0.20            udp dpt:53
+    0     0 LOG        tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:23 LOG flags 0 level 4 prefix "[FW-FWD-BLOCK-TELNET] "
+    0     0 DROP       tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:23
+    0     0 LOG        tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:21 LOG flags 0 level 4 prefix "[FW-FWD-BLOCK-FTP] "
+    0     0 DROP       tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:21
+    0     0 LOG        tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:22 LOG flags 0 level 4 prefix "[FW-FWD-BLOCK-SSH-WAN] "
+    0     0 DROP       tcp  --  *      *       192.168.100.0/24     10.0.0.0/24          tcp dpt:22
+    0     0 LOG        all  --  *      *       0.0.0.0/0            0.0.0.0/0            LOG flags 0 level 4 prefix "[FW-FWD-DROP] "
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+
+# === NAT TABLE ===
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         

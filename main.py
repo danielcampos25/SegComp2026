@@ -62,6 +62,8 @@ except ImportError:
 
 
 
+import os
+import shutil
 import time
 
 
@@ -158,6 +160,158 @@ def setup_firewall(net):
 
 
 # ============================================================
+# Geração de evidências
+# ============================================================
+
+
+def generate_evidence(servers):
+
+    print("\n==============================")
+    print(" Gerando evidências ")
+    print("==============================\n")
+
+    import os
+    from datetime import datetime
+
+    log_dir = "reports_logs"
+    os.makedirs(log_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    evidence_file = os.path.join(log_dir, "evidencias_completas.log")
+
+    with open(evidence_file, "w") as f:
+        f.write("=" * 60 + "\n")
+        f.write(" RELATÓRIO DE EVIDÊNCIAS - FIREWALL\n")
+        f.write(f" Gerado em: {timestamp}\n")
+        f.write("=" * 60 + "\n\n")
+
+        f.write("1. TOPOLOGIA DE REDE\n")
+        f.write("-" * 40 + "\n")
+        f.write("""
+            WAN: 192.168.100.0/24
+              internet: 192.168.100.2
+              fw-eth0:  192.168.100.1
+
+            LAN: 10.0.0.0/24
+              fw-eth1: 10.0.0.1
+              web:     10.0.0.10  (HTTPS, FTP, SSH, Telnet)
+              dns:     10.0.0.20  (DNS)
+              admin:   10.0.0.100
+              client:  10.0.0.101
+""")
+
+        f.write("\n2. POLÍTICA DE SEGURANÇA\n")
+        f.write("-" * 40 + "\n")
+        f.write("""
+   Serviços Permitidos:  HTTPS, DNS
+   Serviços Restritos:   Telnet, FTP
+   Serviço Admin:        SSH (apenas admin)
+""")
+
+        f.write("\n3. MATRIZ DE REGRAS (iptables)\n")
+        f.write("-" * 40 + "\n")
+        f.write("""
+   PERMITIDO:
+     Internet -> Web:  HTTPS (tcp/443)  [fw FORWARD]
+     Internet -> DNS:  DNS (udp/53)     [fw FORWARD]
+     Admin -> Web:     SSH (tcp/22)     [web INPUT]
+
+   BLOQUEADO:
+     Qualquer -> Web:  Telnet (tcp/23)  [web INPUT + fw FORWARD]
+     Qualquer -> Web:  FTP (tcp/21)     [web INPUT + fw FORWARD]
+     Client -> Web:    SSH (tcp/22)     [web INPUT]
+     WAN -> LAN:       Qualquer         [fw FORWARD default DROP]
+""")
+
+        f.write("\n4. PORTAS DOS SERVIÇOS\n")
+        f.write("-" * 40 + "\n")
+        for name, host, ip, port, proto in [
+            ("HTTPS", "web", "10.0.0.10", 443, "TCP"),
+            ("FTP",   "web", "10.0.0.10", 21,  "TCP"),
+            ("SSH",   "web", "10.0.0.10", 22,  "TCP"),
+            ("Telnet","web", "10.0.0.10", 23,  "TCP"),
+            ("DNS",   "dns", "10.0.0.20", 53,  "UDP/TCP"),
+        ]:
+            f.write(f"   {name:<8} {ip:<16} {port:<5} {proto:<8}\n")
+
+        f.write("\n5. ARQUIVOS DE EVIDÊNCIA\n")
+        f.write("-" * 40 + "\n")
+        for file in sorted(os.listdir(log_dir)):
+            f.write(f"   reports_logs/{file}\n")
+
+        f.write("\n" + "=" * 60 + "\n")
+        f.write(" AVALIAÇÃO DOS RESULTADOS (Atividade 5.5)\n")
+        f.write("=" * 60 + "\n\n")
+
+        f.write("1. O firewall protege contra invasões?\n")
+        f.write("-" * 40 + "\n")
+        f.write("""   Sim. O firewall implementa uma política de default DROP nas chains
+   FORWARD e INPUT, bloqueando por padrão todo o tráfego não autorizado.
+   Apenas conexões HTTPS (443/tcp) da Internet para o servidor web e
+   consultas DNS (53/udp) da Internet para o servidor DNS são permitidas
+   através do firewall. Qualquer tentativa de acesso externo a serviços
+   como Telnet, FTP ou SSH é rejeitada silenciosamente (DROP), sem
+   responder ao requisitante — o que torna a rede interna invisível para
+   varreduras externas.\n\n""")
+
+        f.write("2. O firewall protege contra malware interno?\n")
+        f.write("-" * 40 + "\n")
+        f.write("""   Parcialmente. O firewall controla o tráfego entre redes diferentes
+   (WAN ↔ LAN), mas hosts no mesmo segmento LAN (10.0.0.0/24) comunicam-se
+   diretamente via switch, sem passar pelo firewall. Para mitigar riscos
+   internos, foram aplicadas regras iptables na chain INPUT dos próprios
+   servidores (web e dns), restringindo serviços localmente. Apesar disso,
+   um host comprometido na mesma VLAN ainda pode realizar ataques laterais
+   (ARP spoofing, scans). A proteção completa contra malware interno
+   exigiria segmentação de rede (VLANs/DMZ), firewall stateful por host
+   (ex: nftables), e um sistema de detecção de intrusão (IDS).\n\n""")
+
+        f.write("3. O firewall protege contra phishing?\n")
+        f.write("-" * 40 + "\n")
+        f.write("""   Indiretamente. Phishing é um ataque de engenharia social que explora
+   o fator humano, não vulnerabilidades técnicas de rede. Um firewall não
+   pode impedir que um usuário clique em um link malicioso ou forneça
+   credenciais em um site fraudulento. No entanto, o firewall contribui
+   para a defesa em profundidade ao:
+     - Reduzir a superfície de ataque (apenas HTTPS e DNS são expostos);
+     - Bloquear conexões de saída para portas não autorizadas;
+     - Impedir que servidores internos sejam acessados por serviços
+       inseguros como Telnet (tráfego em texto claro) e FTP.
+   A mitigação de phishing requer camadas adicionais: filtro antispam,
+   DMARC/DKIM, MVTs, conscientização de usuários e MFA.\n\n""")
+
+        f.write("=" * 60 + "\n")
+        f.write(" ACLs Packet Tracer (Atividade 5.3)\n")
+        f.write("=" * 60 + "\n\n")
+        f.write("""   As ACLs equivalentes para Cisco Packet Tracer estão documentadas no
+   arquivo packet_tracer_acls.md na raiz do projeto.
+
+   Resumo das ACLs:
+
+   ACL 100 (WAN - interface Fa0/0 in):
+     permit tcp host 192.168.100.2 host 10.0.0.10 eq 443
+     permit udp host 192.168.100.2 host 10.0.0.20 eq 53
+     deny tcp 192.168.100.0 0.0.0.255 10.0.0.0 0.0.0.255 eq 23
+     deny tcp 192.168.100.0 0.0.0.255 10.0.0.0 0.0.0.255 eq 21
+     deny tcp 192.168.100.0 0.0.0.255 10.0.0.0 0.0.0.255 eq 22
+     deny ip any 10.0.0.0 0.0.0.255
+
+   ACL 101 (LAN - interface Fa0/1 in):
+     permit tcp host 10.0.0.100 10.0.0.0 0.0.0.255 eq 22
+     deny tcp any 10.0.0.0 0.0.0.255 eq 23
+     deny tcp any 10.0.0.0 0.0.0.255 eq 21
+     deny tcp host 10.0.0.101 10.0.0.0 0.0.0.255 eq 22
+     permit ip any any\n""")
+
+    print(f"Evidências salvas em {evidence_file}")
+
+    print("\nArquivos gerados em reports_logs/:")
+    for file in sorted(os.listdir(log_dir)):
+        print(f"  - {file}")
+
+
+# ============================================================
 # Execução dos testes
 # ============================================================
 
@@ -207,6 +361,12 @@ def main():
 
     servers = None
 
+    firewall = None
+
+    if os.path.exists("reports_logs"):
+        shutil.rmtree("reports_logs")
+    os.makedirs("reports_logs", exist_ok=True)
+
 
     try:
 
@@ -244,6 +404,8 @@ def main():
 
         time.sleep(3)
 
+        servers.log_service_ports()
+
 
 
         # -------------------------------
@@ -251,7 +413,7 @@ def main():
         # -------------------------------
 
 
-        setup_firewall(net)
+        firewall = setup_firewall(net)
 
 
 
@@ -265,6 +427,8 @@ def main():
 
 
         run_tests(net)
+
+        generate_evidence(servers)
 
 
 
@@ -300,6 +464,11 @@ def main():
         print(
             "\nEncerrando ambiente..."
         )
+
+
+
+        if firewall:
+            firewall.clear_rules()
 
 
 

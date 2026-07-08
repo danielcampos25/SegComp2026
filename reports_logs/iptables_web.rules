@@ -1,0 +1,36 @@
+# Regras iptables do host web
+# Gerado em: 2026-07-07 21:40:26
+
+# === FILTER TABLE ===
+Chain INPUT (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+    0     0 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:443
+    0     0 ACCEPT     tcp  --  *      *       10.0.0.100           0.0.0.0/0            tcp dpt:22
+    0     0 LOG        tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:23 LOG flags 0 level 4 prefix "[WEB-BLOCK-TELNET] "
+    0     0 DROP       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:23
+    0     0 LOG        tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:21 LOG flags 0 level 4 prefix "[WEB-BLOCK-FTP] "
+    0     0 DROP       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:21
+    0     0 LOG        tcp  --  *      *       10.0.0.101           0.0.0.0/0            tcp dpt:22 LOG flags 0 level 4 prefix "[WEB-BLOCK-SSH-CLIENT] "
+    0     0 DROP       tcp  --  *      *       10.0.0.101           0.0.0.0/0            tcp dpt:22
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+
+# === NAT TABLE ===
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
